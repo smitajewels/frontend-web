@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { goldApi } from "../../api/endpoints";
 import { TransactionTile } from "../../components/GoldWidgets";
 import { Card, Chip, EmptyState, Screen, Skeleton, Tabs } from "../../components/ui";
+import { useAuth } from "../../context/AuthContext";
 import type { GoldTransaction, RazorpayPayment } from "../../types/api";
 import { cn, formatDateTime, formatInr } from "../../utils/format";
 
 type Tab = "transactions" | "payments";
 
 export default function HistoryPage() {
+  const { user } = useAuth();
   const [tab, setTab] = useState<Tab>("transactions");
   const [filter, setFilter] = useState<string | undefined>();
   const [items, setItems] = useState<GoldTransaction[]>([]);
@@ -101,20 +103,23 @@ export default function HistoryPage() {
       ) : (
         payments.map((p) => (
           <Card key={p.id} className="mb-2">
-            <div className="flex items-center justify-between">
-              <p className="text-lg font-semibold text-ink">{formatInr(p.amountInr)}</p>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-semibold text-ink">{user?.name || "You"}</p>
+                <p className="mt-1 text-lg font-semibold text-primary-dark">{formatInr(p.amountInr)}</p>
+              </div>
               <span
                 className={cn(
-                  "text-xs font-bold",
-                  p.status === "CAPTURED" && "text-success",
-                  p.status === "FAILED" && "text-error",
-                  p.status !== "CAPTURED" && p.status !== "FAILED" && "text-warning"
+                  "shrink-0 rounded-sm px-2 py-1 text-xs font-bold",
+                  p.status === "CAPTURED" && "bg-eligible text-success",
+                  p.status === "FAILED" && "bg-red-50 text-error",
+                  p.status !== "CAPTURED" && p.status !== "FAILED" && "bg-orange-50 text-warning"
                 )}
               >
                 {p.status}
               </span>
             </div>
-            <p className="mt-1 text-[13px] text-muted">Order: {p.razorpayOrderId}</p>
+            <p className="mt-2 text-[13px] text-muted">Order: {p.razorpayOrderId}</p>
             {p.razorpayPaymentId ? (
               <p className="mt-1 text-[13px] text-muted">Payment: {p.razorpayPaymentId}</p>
             ) : null}

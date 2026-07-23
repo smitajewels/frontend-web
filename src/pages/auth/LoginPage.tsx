@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "../../context/AuthContext";
-import { AppLogo, Input, PrimaryButton, Screen } from "../../components/ui";
+import { AppLogo, Card, Input, PrimaryButton } from "../../components/ui";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -31,72 +31,69 @@ export default function LoginPage() {
   };
 
   return (
-    <Screen>
-      <div className="mb-8 mt-6 flex flex-col items-center text-center">
-        <div className="relative flex items-center justify-center py-2">
-          <div
-            className="pointer-events-none absolute size-48 rounded-full bg-[radial-gradient(circle,rgba(212,175,55,0.32)_0%,rgba(255,251,245,0)_68%)]"
-            aria-hidden
-          />
-          <AppLogo
-            variant="mark"
-            size={168}
-            className="relative drop-shadow-[0_6px_18px_rgba(184,134,11,0.28)]"
-          />
-        </div>
-        <h1 className="mt-1 bg-gradient-to-b from-primary-light via-primary to-primary-dark bg-clip-text font-serif text-[34px] font-bold tracking-[0.18em] text-transparent uppercase sm:text-[38px]">
-          Smita Jewellers
-        </h1>
-        <div className="mt-2 flex items-center gap-2">
-          <span className="h-px w-8 bg-primary/40" />
-          <span className="text-[11px] font-semibold tracking-[0.22em] text-primary uppercase">
+    <div className="flex min-h-dvh items-center justify-center bg-[radial-gradient(ellipse_at_top,_rgba(232,200,114,0.18),_transparent_55%),var(--color-bg)] px-4 py-8">
+      <Card className="animate-fade-in w-full max-w-[380px] !p-5 shadow-[0_8px_28px_rgba(44,36,22,0.08)] sm:!p-6">
+        <div className="mb-5 flex flex-col items-center text-center">
+          <div className="relative flex items-center justify-center">
+            <div
+              className="pointer-events-none absolute size-28 rounded-full bg-[radial-gradient(circle,rgba(212,175,55,0.28)_0%,transparent_70%)]"
+              aria-hidden
+            />
+            <AppLogo
+              variant="mark"
+              size={96}
+              className="relative drop-shadow-[0_4px_12px_rgba(184,134,11,0.22)]"
+            />
+          </div>
+          <h1 className="mt-1 bg-gradient-to-b from-primary-light via-primary to-primary-dark bg-clip-text font-serif text-[22px] font-bold tracking-[0.14em] text-transparent uppercase">
+            Smita Jewellers
+          </h1>
+          <p className="mt-1 text-[11px] font-semibold tracking-[0.18em] text-primary uppercase">
             Digital Gold
-          </span>
-          <span className="h-px w-8 bg-primary/40" />
+          </p>
+          <p className="mt-3 text-sm font-medium text-ink">Sign in to your account</p>
         </div>
-        <p className="mt-5 text-base font-medium text-ink">Sign in to manage your gold portfolio</p>
-        <p className="mt-2 max-w-sm text-[13px] leading-5 text-muted">
-          Buy digital gold in seconds. Secure, transparent, and backed by live market rates.
-        </p>
-      </div>
 
-      <form onSubmit={onSubmit} noValidate>
-        <Input
-          label="Email"
-          type="email"
-          autoComplete="email"
-          placeholder="you@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          error={errors.email}
-        />
-        <Input
-          label="Password"
-          type="password"
-          autoComplete="current-password"
-          placeholder="Enter password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          error={errors.password}
-        />
+        <form onSubmit={onSubmit} noValidate>
+          <Input
+            label="Email"
+            type="email"
+            autoComplete="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            error={errors.email}
+            className="!py-3"
+          />
+          <Input
+            label="Password"
+            type="password"
+            autoComplete="current-password"
+            placeholder="Enter password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            error={errors.password}
+            className="!py-3"
+          />
 
-        <div className="mb-4">
-          <Link to="/forgot-password" className="text-sm font-semibold text-primary">
-            Forgot password?
+          <div className="mb-3 -mt-1 text-right">
+            <Link to="/forgot-password" className="text-sm font-semibold text-primary hover:underline">
+              Forgot password?
+            </Link>
+          </div>
+
+          <PrimaryButton type="submit" loading={loading} className="!py-3.5">
+            Sign In
+          </PrimaryButton>
+        </form>
+
+        <p className="mt-4 text-center text-sm text-muted">
+          New here?{" "}
+          <Link to="/register" className="font-semibold text-primary hover:underline">
+            Create account
           </Link>
-        </div>
-
-        <PrimaryButton type="submit" loading={loading}>
-          Sign In
-        </PrimaryButton>
-      </form>
-
-      <p className="mt-6 text-center text-muted">
-        New here?{" "}
-        <Link to="/register" className="font-semibold text-primary">
-          Create account
-        </Link>
-      </p>
-    </Screen>
+        </p>
+      </Card>
+    </div>
   );
 }
