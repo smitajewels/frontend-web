@@ -6,7 +6,7 @@ export function formatInr(n: number) {
 }
 
 export function formatGrams(n: number) {
-  return `${n.toFixed(4)} g`;
+  return `${n.toFixed(3)} g`;
 }
 
 export function formatDate(iso: string) {

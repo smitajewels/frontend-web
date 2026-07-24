@@ -142,6 +142,8 @@ export interface BuyGoldResult {
     karat: GoldKarat;
     grams: number;
     ratePer10Gram: number;
+    adminRatePer10g?: number;
+    markupPer10g?: number;
     baseAmountInr: number;
     gstAmountInr: number;
     gstPercent: number;

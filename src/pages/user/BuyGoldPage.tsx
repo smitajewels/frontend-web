@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { goldApi } from "../../api/endpoints";
 import { Header, Input, PrimaryButton, Screen } from "../../components/ui";
+import { useAuth } from "../../context/AuthContext";
 import type { BuyGoldMode, GoldKarat } from "../../types/api";
 import { cn, formatInr } from "../../utils/format";
 import { openRazorpayCheckout } from "../../utils/razorpay";
@@ -11,6 +12,7 @@ const KARATS: GoldKarat[] = ["K18", "K22", "K24"];
 
 export default function BuyGoldPage() {
   const navigate = useNavigate();
+  const { refreshUser } = useAuth();
   const [karat, setKarat] = useState<GoldKarat>("K24");
   const [mode, setMode] = useState<BuyGoldMode>("BY_GRAMS");
   const [grams, setGrams] = useState("0.5");
@@ -47,7 +49,8 @@ export default function BuyGoldPage() {
             });
             const g = verified.data?.breakdown.grams ?? breakdown.grams;
             const amt = verified.data?.breakdown.amountInr ?? breakdown.amountInr;
-            toast.success(`Purchased ${g.toFixed(4)}g for ${formatInr(amt)}`);
+            await refreshUser();
+            toast.success(`Purchased ${g.toFixed(3)}g for ${formatInr(amt)}`);
             navigate("/app");
           } catch (err) {
             toast.error(err instanceof Error ? err.message : "Payment verification failed");
@@ -69,7 +72,7 @@ export default function BuyGoldPage() {
       <Screen>
         <h1 className="mt-2 text-[22px] font-semibold text-ink">Buy Gold</h1>
         <p className="mb-6 text-[13px] text-muted">
-          Pay securely via Razorpay · Amount (excl. GST) · Gold weight (+ GST)
+          Display rate = round(admin ÷ 1.03) + ₹300/10g · Payment includes 3% GST
         </p>
 
         <form onSubmit={onBuy}>
