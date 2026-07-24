@@ -15,6 +15,17 @@ function gramsFor(portfolio: Portfolio, karat: GoldKarat) {
   return portfolio.gramsK24;
 }
 
+function firstHeldKarat(portfolio: Portfolio): GoldKarat {
+  for (const k of KARATS) {
+    if (gramsFor(portfolio, k) > 0) return k;
+  }
+  return "K24";
+}
+
+function roundCollectGrams(n: number) {
+  return Math.floor(n * 1000) / 1000;
+}
+
 export default function CollectGoldUserPage() {
   const { userId = "" } = useParams();
   const [params] = useSearchParams();
@@ -37,12 +48,24 @@ export default function CollectGoldUserPage() {
         const qKarat = params.get("karat") as GoldKarat | null;
         const qGrams = params.get("grams");
         const qAll = params.get("collectAll") === "1";
+
         if (qAll) {
           setCollectAll(true);
-        } else if (qKarat && KARATS.includes(qKarat)) {
-          setKarat(qKarat);
-          if (qGrams) setGrams(qGrams);
-          else setGrams(String(gramsFor(r.data.portfolio, qKarat) || 0.5));
+          return;
+        }
+
+        const selected =
+          qKarat && KARATS.includes(qKarat) && gramsFor(r.data.portfolio, qKarat) > 0
+            ? qKarat
+            : firstHeldKarat(r.data.portfolio);
+
+        setKarat(selected);
+        setCollectAll(false);
+        const held = gramsFor(r.data.portfolio, selected);
+        if (qGrams && Number(qGrams) > 0 && Number(qGrams) <= held + 1e-9) {
+          setGrams(String(roundCollectGrams(Number(qGrams))));
+        } else {
+          setGrams(String(roundCollectGrams(held || 0)));
         }
       })
       .catch(() => toast.error("Could not load customer portfolio"))
@@ -61,14 +84,14 @@ export default function CollectGoldUserPage() {
     setCollectAll(false);
     if (user) {
       const held = gramsFor(user.portfolio, k);
-      if (held > 0) setGrams(String(Number(held.toFixed(4))));
+      setGrams(String(roundCollectGrams(held || 0)));
     }
   };
 
   const useFullKarat = () => {
     if (!user) return;
     setCollectAll(false);
-    setGrams(String(Number(available.toFixed(4))));
+    setGrams(String(roundCollectGrams(available)));
   };
 
   const onCollect = async (e: FormEvent) => {
@@ -76,26 +99,47 @@ export default function CollectGoldUserPage() {
     if (!user) return;
 
     if (!collectAll) {
-      const amount = Number(grams);
+      const amount = roundCollectGrams(Number(grams));
       if (!amount || amount <= 0) {
-        toast.error("Enter grams to collect");
+        toast.error(`Enter grams to collect for ${karat.replace("K", "")}K`);
+        return;
+      }
+      if (available <= 0) {
+        toast.error(`No ${karat.replace("K", "")}K gold in this portfolio`);
         return;
       }
       if (amount > available + 1e-9) {
         toast.error(`Only ${formatGrams(available)} available in ${karat.replace("K", "")}K`);
         return;
       }
+
+      try {
+        setLoading(true);
+        await adminApi.collectGold(userId, {
+          karat,
+          grams: amount,
+          collectAllPortfolio: false,
+          notes: `Physical handover · ${karat}`,
+        });
+        toast.success(`Collected ${formatGrams(amount)} of ${karat.replace("K", "")}K`);
+        navigate(`/admin/customers/${userId}`);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed");
+      } finally {
+        setLoading(false);
+      }
+      return;
     }
 
     try {
       setLoading(true);
       await adminApi.collectGold(userId, {
         karat,
-        grams: collectAll ? 0 : Number(grams),
-        collectAllPortfolio: collectAll,
-        notes: collectAll ? "Collect entire portfolio" : "Physical handover at store",
+        grams: 0,
+        collectAllPortfolio: true,
+        notes: "Collect entire portfolio",
       });
-      toast.success("Collection recorded successfully");
+      toast.success("Entire portfolio collected");
       navigate(`/admin/customers/${userId}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed");
@@ -121,7 +165,7 @@ export default function CollectGoldUserPage() {
           <div>
             <h1 className="text-[22px] font-semibold text-ink">Collect for {userName}</h1>
             <p className="mt-1 text-[13px] leading-5 text-muted">
-              Use live portfolio balances. Tap a karat to auto-fill available grams.
+              Deduction is karat-specific: selecting 18K / 22K / 24K only reduces that holding.
             </p>
           </div>
           <Link
@@ -139,7 +183,7 @@ export default function CollectGoldUserPage() {
         ) : null}
 
         <form onSubmit={onCollect}>
-          <p className="mb-2 text-sm font-medium text-muted">Select karat</p>
+          <p className="mb-2 text-sm font-medium text-muted">Select karat to deduct</p>
           <div className="mb-4 flex gap-2">
             {KARATS.map((k) => {
               const held = user ? gramsFor(user.portfolio, k) : 0;
@@ -172,7 +216,7 @@ export default function CollectGoldUserPage() {
               Collect entire portfolio
               {user ? (
                 <span className="mt-0.5 block text-[13px] text-muted">
-                  {formatGrams(user.portfolio.totalGoldGrams)} total
+                  Clears 18K + 22K + 24K ({formatGrams(user.portfolio.totalGoldGrams)} total)
                 </span>
               ) : null}
             </span>
@@ -201,7 +245,7 @@ export default function CollectGoldUserPage() {
                 </button>
               </div>
               <Input
-                label="Grams to collect"
+                label={`Grams to collect from ${karat.replace("K", "")}K`}
                 inputMode="decimal"
                 value={grams}
                 onChange={(e) => setGrams(e.target.value)}
@@ -212,7 +256,7 @@ export default function CollectGoldUserPage() {
           <PrimaryButton type="submit" loading={loading} disabled={!user || (!collectAll && available <= 0)}>
             {collectAll
               ? "Collect entire portfolio"
-              : `Collect ${grams || "0"}g · ${karat.replace("K", "")}K`}
+              : `Collect ${grams || "0"}g from ${karat.replace("K", "")}K only`}
           </PrimaryButton>
         </form>
       </Screen>
