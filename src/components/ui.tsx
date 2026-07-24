@@ -1,4 +1,4 @@
-import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, useEffect, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
 import { cn } from "../utils/format";
 
 export function AppLogo({
@@ -243,11 +243,14 @@ export function Avatar({
   name,
   src,
   size = 48,
+  className,
 }: {
   name: string;
   src?: string | null;
   size?: number;
+  className?: string;
 }) {
+  const [broken, setBroken] = useState(false);
   const initials = name
     .split(" ")
     .map((p) => p[0])
@@ -255,22 +258,30 @@ export function Avatar({
     .slice(0, 2)
     .toUpperCase();
 
-  if (src) {
+  useEffect(() => {
+    setBroken(false);
+  }, [src]);
+
+  if (src && !broken) {
     return (
       <img
         src={src}
         alt={name}
         width={size}
         height={size}
-        className="rounded-full object-cover"
+        className={cn("rounded-full object-cover", className)}
         style={{ width: size, height: size }}
+        onError={() => setBroken(true)}
       />
     );
   }
 
   return (
     <div
-      className="flex items-center justify-center rounded-full bg-surface-muted text-sm font-semibold text-primary-dark"
+      className={cn(
+        "flex items-center justify-center rounded-full bg-surface-muted text-sm font-semibold text-primary-dark",
+        className
+      )}
       style={{ width: size, height: size }}
       aria-label={name}
     >
