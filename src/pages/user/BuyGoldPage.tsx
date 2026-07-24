@@ -1,14 +1,16 @@
-import { useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { goldApi } from "../../api/endpoints";
+import { LiveRateBanner } from "../../components/GoldWidgets";
 import { Header, Input, PrimaryButton, Screen } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
-import type { BuyGoldMode, GoldKarat } from "../../types/api";
+import type { BuyGoldMode, GoldKarat, LiveGoldRates } from "../../types/api";
 import { cn, formatInr } from "../../utils/format";
 import { openRazorpayCheckout } from "../../utils/razorpay";
 
 const KARATS: GoldKarat[] = ["K18", "K22", "K24"];
+const RATES_POLL_MS = 30_000;
 
 export default function BuyGoldPage() {
   const navigate = useNavigate();
@@ -18,6 +20,26 @@ export default function BuyGoldPage() {
   const [grams, setGrams] = useState("0.5");
   const [amountInr, setAmountInr] = useState("5000");
   const [loading, setLoading] = useState(false);
+  const [rates, setRates] = useState<LiveGoldRates | null>(null);
+  const [ratesFetchedAt, setRatesFetchedAt] = useState<string | null>(null);
+
+  const loadRates = useCallback(async () => {
+    try {
+      const r = await goldApi.getLiveRates();
+      if (r.data) {
+        setRates(r.data);
+        setRatesFetchedAt(new Date().toISOString());
+      }
+    } catch {
+      /* keep last */
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRates();
+    const timer = window.setInterval(loadRates, RATES_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [loadRates]);
 
   const onBuy = async (e: FormEvent) => {
     e.preventDefault();
@@ -71,9 +93,19 @@ export default function BuyGoldPage() {
       <Header title="Buy Gold" onBack={() => navigate(-1)} />
       <Screen>
         <h1 className="mt-2 text-[22px] font-semibold text-ink">Buy Gold</h1>
-        <p className="mb-6 text-[13px] text-muted">
+        <p className="mb-4 text-[13px] text-muted">
           Display rate = round(admin ÷ 1.03) + ₹300/10g · Payment includes 3% GST
         </p>
+
+        {rates ? (
+          <div className="mb-4">
+            <LiveRateBanner
+              rates={rates}
+              note={rates.liveRateIncludesGstNote}
+              updatedAt={ratesFetchedAt}
+            />
+          </div>
+        ) : null}
 
         <form onSubmit={onBuy}>
           <p className="mb-2 text-sm font-medium text-muted">Select karat</p>

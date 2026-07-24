@@ -1,62 +1,90 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { goldApi } from "../../api/endpoints";
-import { LiveRateBanner, PortfolioCard } from "../../components/GoldWidgets";
+import { LiveRateBanner, PortfolioCard, PosterCollage } from "../../components/GoldWidgets";
 import { Screen, Skeleton } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import type { LiveGoldRates } from "../../types/api";
 
 const banners = ["/banners/banner_1.png", "/banners/banner_2.png", "/banners/banner_3.png", "/banners/banner_4.png"];
 
+/** Poll live rates so 18K / 22K / 24K stay in sync with backend display rates. */
+const RATES_POLL_MS = 30_000;
+
 export default function HomePage() {
   const { user, refreshUser } = useAuth();
   const [rates, setRates] = useState<LiveGoldRates | null>(null);
+  const [ratesFetchedAt, setRatesFetchedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const loadRates = useCallback(async () => {
+    try {
+      const r = await goldApi.getLiveRates();
+      if (r.data) {
+        setRates(r.data);
+        setRatesFetchedAt(new Date().toISOString());
+      }
+    } catch {
+      /* keep last good rates */
+    }
+  }, []);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         await refreshUser();
-        const r = await goldApi.getLiveRates();
-        if (alive) setRates(r.data);
-      } catch {
-        /* ignore */
+        await loadRates();
       } finally {
         if (alive) setLoading(false);
       }
     })();
+
+    const timer = window.setInterval(() => {
+      loadRates();
+    }, RATES_POLL_MS);
+
+    const onFocus = () => loadRates();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") loadRates();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       alive = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [refreshUser]);
+  }, [refreshUser, loadRates]);
 
   if (!user) return null;
 
   return (
     <Screen>
       <h1 className="text-[22px] font-semibold text-ink">Hello, {user.name.split(" ")[0]}</h1>
-      <p className="mb-2 text-[13px] text-muted">Invest in gold, digitally</p>
+      <p className="mb-3 text-[13px] text-muted">Invest in gold, digitally</p>
 
-      <div className="my-4">
-        <PortfolioCard portfolio={user.portfolio} />
+      {/* 1. Poster collage on top */}
+      <PosterCollage images={banners} />
+
+      {/* 2. Live rates — all karats, auto-refresh */}
+      <div className="mt-4">
+        {loading && !rates ? (
+          <Skeleton className="h-28 w-full" />
+        ) : rates ? (
+          <LiveRateBanner
+            rates={rates}
+            note={rates.liveRateIncludesGstNote}
+            updatedAt={ratesFetchedAt}
+          />
+        ) : null}
       </div>
 
-      {loading && !rates ? (
-        <Skeleton className="mb-4 h-24 w-full" />
-      ) : rates ? (
-        <LiveRateBanner k24={rates.k24RatePer10g} note={rates.liveRateIncludesGstNote} />
-      ) : null}
-
-      <div className="my-4 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {banners.map((src) => (
-          <img
-            key={src}
-            src={src}
-            alt="Promotion"
-            className="h-[120px] w-[280px] shrink-0 rounded-md object-cover"
-          />
-        ))}
+      {/* 3. Portfolio total */}
+      <div className="mt-4">
+        <PortfolioCard portfolio={user.portfolio} />
       </div>
 
       <div className="mt-4 flex gap-2">

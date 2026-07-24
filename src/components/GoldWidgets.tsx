@@ -1,4 +1,4 @@
-import type { Portfolio } from "../types/api";
+import type { LiveGoldRates, Portfolio } from "../types/api";
 import { formatDate, formatGrams, formatInr } from "../utils/format";
 import { Card, GoldGradientCard } from "./ui";
 
@@ -21,18 +21,79 @@ function KaratChip({ label, grams }: { label: string; grams: number }) {
   return (
     <div className="flex-1 rounded-sm bg-white/20 p-2 text-center">
       <p className="text-xs font-semibold">{label}</p>
-      <p className="mt-0.5 text-[13px]">{grams.toFixed(2)}g</p>
+      <p className="mt-0.5 text-[13px]">{grams.toFixed(3)}g</p>
     </div>
   );
 }
 
-export function LiveRateBanner({ k24, note }: { k24: number; note?: string }) {
+/** Live display rates for 18K / 22K / 24K (per 10g). */
+export function LiveRateBanner({
+  rates,
+  note,
+  updatedAt,
+}: {
+  rates: Pick<LiveGoldRates, "k18RatePer10g" | "k22RatePer10g" | "k24RatePer10g">;
+  note?: string;
+  updatedAt?: string | null;
+}) {
+  const items = [
+    { label: "18K", value: rates.k18RatePer10g },
+    { label: "22K", value: rates.k22RatePer10g },
+    { label: "24K", value: rates.k24RatePer10g },
+  ];
+
   return (
     <Card>
-      <p className="text-[13px] text-muted">Live Gold Rate (24K / 10g)</p>
-      <p className="mt-1 text-[22px] font-semibold text-primary-dark">{formatInr(k24)}</p>
-      {note ? <p className="mt-1.5 text-[13px] text-faint">{note}</p> : null}
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="text-[13px] font-medium text-muted">Live gold rates / 10g</p>
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-success">
+          <span className="size-1.5 animate-pulse rounded-full bg-success" aria-hidden />
+          Live
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {items.map((item) => (
+          <div
+            key={item.label}
+            className="rounded-md border border-border bg-surface-muted/60 px-2 py-3 text-center"
+          >
+            <p className="text-xs font-semibold text-muted">{item.label}</p>
+            <p className="mt-1 text-sm font-bold leading-tight text-primary-dark tabular-nums sm:text-base">
+              {formatInr(item.value)}
+            </p>
+          </div>
+        ))}
+      </div>
+      {note ? <p className="mt-3 text-[12px] leading-4 text-faint">{note}</p> : null}
+      {updatedAt ? (
+        <p className="mt-1.5 text-[11px] text-faint">
+          Updated {new Date(updatedAt).toLocaleTimeString("en-IN")}
+        </p>
+      ) : null}
     </Card>
+  );
+}
+
+/** 2×2 poster collage for home hero. */
+export function PosterCollage({ images }: { images: string[] }) {
+  const source = images.length > 0 ? images : ["/banners/banner_1.png"];
+  const tiles = [...source.slice(0, 4)];
+  while (tiles.length < 4) {
+    tiles.push(source[tiles.length % source.length]);
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-2 overflow-hidden rounded-lg">
+      {tiles.map((src, i) => (
+        <img
+          key={`${src}-${i}`}
+          src={src}
+          alt={`Promotion ${i + 1}`}
+          className="aspect-[4/3] w-full object-cover"
+          loading={i === 0 ? "eager" : "lazy"}
+        />
+      ))}
+    </div>
   );
 }
 

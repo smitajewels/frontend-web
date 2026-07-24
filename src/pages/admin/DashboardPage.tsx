@@ -45,7 +45,7 @@ export default function AdminDashboardPage() {
               {formatInr(data.todayPurchaseAmountInr)}
             </p>
           </Card>
-          <LiveRateBanner k24={data.currentRates.k24RatePer10g} />
+          <LiveRateBanner rates={data.currentRates} />
         </>
       ) : null}
     </Screen>
