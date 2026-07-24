@@ -74,11 +74,7 @@ export default function HomePage() {
         {loading && !rates ? (
           <Skeleton className="h-28 w-full" />
         ) : rates ? (
-          <LiveRateBanner
-            rates={rates}
-            note={rates.liveRateIncludesGstNote}
-            updatedAt={ratesFetchedAt}
-          />
+          <LiveRateBanner rates={rates} updatedAt={ratesFetchedAt} />
         ) : null}
       </div>
 

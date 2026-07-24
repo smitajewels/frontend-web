@@ -1,5 +1,6 @@
+import { useEffect, useState } from "react";
 import type { LiveGoldRates, Portfolio } from "../types/api";
-import { formatDate, formatGrams, formatInr } from "../utils/format";
+import { cn, formatDate, formatGrams, formatInr } from "../utils/format";
 import { Card, GoldGradientCard } from "./ui";
 
 export function PortfolioCard({ portfolio }: { portfolio: Portfolio }) {
@@ -74,25 +75,80 @@ export function LiveRateBanner({
   );
 }
 
-/** 2×2 poster collage for home hero. */
-export function PosterCollage({ images }: { images: string[] }) {
+/** One-by-one animated poster carousel. */
+export function PosterCollage({
+  images,
+  intervalMs = 3500,
+}: {
+  images: string[];
+  intervalMs?: number;
+}) {
   const source = images.length > 0 ? images : ["/banners/banner_1.png"];
-  const tiles = [...source.slice(0, 4)];
-  while (tiles.length < 4) {
-    tiles.push(source[tiles.length % source.length]);
-  }
+  const [index, setIndex] = useState(0);
+  const [direction, setDirection] = useState<"next" | "prev">("next");
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (paused || source.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setDirection("next");
+      setIndex((i) => (i + 1) % source.length);
+    }, intervalMs);
+    return () => window.clearInterval(timer);
+  }, [paused, source.length, intervalMs]);
+
+  const goTo = (next: number) => {
+    setDirection(next > index || (index === source.length - 1 && next === 0) ? "next" : "prev");
+    setIndex(next);
+  };
 
   return (
-    <div className="grid grid-cols-2 gap-2 overflow-hidden rounded-lg">
-      {tiles.map((src, i) => (
-        <img
-          key={`${src}-${i}`}
-          src={src}
-          alt={`Promotion ${i + 1}`}
-          className="aspect-[4/3] w-full object-cover"
-          loading={i === 0 ? "eager" : "lazy"}
-        />
-      ))}
+    <div
+      className="relative overflow-hidden rounded-lg"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onTouchStart={() => setPaused(true)}
+      onTouchEnd={() => setPaused(false)}
+    >
+      <div className="relative aspect-[16/9] w-full bg-surface-muted">
+        {source.map((src, i) => {
+          const active = i === index;
+          return (
+            <img
+              key={`${src}-${i}`}
+              src={src}
+              alt={`Promotion ${i + 1}`}
+              className={cn(
+                "absolute inset-0 h-full w-full object-cover transition-all duration-700 ease-out",
+                active
+                  ? "z-10 translate-x-0 opacity-100 scale-100"
+                  : direction === "next"
+                    ? "z-0 -translate-x-6 opacity-0 scale-[1.02]"
+                    : "z-0 translate-x-6 opacity-0 scale-[1.02]"
+              )}
+              loading={i === 0 ? "eager" : "lazy"}
+              aria-hidden={!active}
+            />
+          );
+        })}
+      </div>
+
+      {source.length > 1 ? (
+        <div className="absolute bottom-3 left-0 right-0 z-20 flex justify-center gap-1.5">
+          {source.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              aria-label={`Show poster ${i + 1}`}
+              onClick={() => goTo(i)}
+              className={cn(
+                "h-1.5 rounded-full transition-all duration-300",
+                i === index ? "w-5 bg-white shadow-sm" : "w-1.5 bg-white/55 hover:bg-white/80"
+              )}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

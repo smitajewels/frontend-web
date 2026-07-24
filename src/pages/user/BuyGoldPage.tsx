@@ -93,17 +93,11 @@ export default function BuyGoldPage() {
       <Header title="Buy Gold" onBack={() => navigate(-1)} />
       <Screen>
         <h1 className="mt-2 text-[22px] font-semibold text-ink">Buy Gold</h1>
-        <p className="mb-4 text-[13px] text-muted">
-          Display rate = round(admin ÷ 1.03) + ₹300/10g · Payment includes 3% GST
-        </p>
+        <p className="mb-4 text-[13px] text-muted">Pay securely via Razorpay</p>
 
         {rates ? (
           <div className="mb-4">
-            <LiveRateBanner
-              rates={rates}
-              note={rates.liveRateIncludesGstNote}
-              updatedAt={ratesFetchedAt}
-            />
+            <LiveRateBanner rates={rates} updatedAt={ratesFetchedAt} />
           </div>
         ) : null}
 
