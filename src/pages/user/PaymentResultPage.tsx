@@ -2,11 +2,37 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { goldApi } from "../../api/endpoints";
-import { Header, PrimaryButton, Screen } from "../../components/ui";
+import { PrimaryButton } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import { formatInr } from "../../utils/format";
 
-type Outcome = "loading" | "success" | "failure" | "login";
+type Outcome = "loading" | "success" | "failure" | "login" | "idle";
+
+const PENDING_INVOICE_KEY = "payu_pending_invoice";
+
+export function stashPendingPayuInvoice(invoiceNumber: string) {
+  try {
+    sessionStorage.setItem(PENDING_INVOICE_KEY, invoiceNumber);
+  } catch {
+    /* ignore */
+  }
+}
+
+function readPendingPayuInvoice() {
+  try {
+    return sessionStorage.getItem(PENDING_INVOICE_KEY)?.trim() || "";
+  } catch {
+    return "";
+  }
+}
+
+function clearPendingPayuInvoice() {
+  try {
+    sessionStorage.removeItem(PENDING_INVOICE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 function firstParam(params: URLSearchParams, keys: string[]) {
   for (const key of keys) {
@@ -22,7 +48,7 @@ export default function PaymentResultPage({ kind }: { kind: "success" | "failure
   const { user, loading: authLoading, refreshUser } = useAuth();
   const [params] = useSearchParams();
   const [outcome, setOutcome] = useState<Outcome>("loading");
-  const [message, setMessage] = useState("Confirming your payment…");
+  const [message, setMessage] = useState("Loading payment result…");
   const ran = useRef(false);
 
   useEffect(() => {
@@ -30,27 +56,40 @@ export default function PaymentResultPage({ kind }: { kind: "success" | "failure
     if (ran.current) return;
     ran.current = true;
 
-    const invoiceNumber = firstParam(params, [
-      "payuInvoiceNumber",
-      "invoiceNumber",
-      "invoice_number",
-      "txnid",
-      "udf1",
-    ]);
+    const invoiceNumber =
+      firstParam(params, [
+        "payuInvoiceNumber",
+        "invoiceNumber",
+        "invoice_number",
+        "txnid",
+        "udf1",
+      ]) || readPendingPayuInvoice();
+
     const txnId =
       firstParam(params, ["payuTransactionId", "mihpayid", "payuId", "txnId"]) || undefined;
     const status =
-      firstParam(params, ["payuStatus", "status", "txnStatus", "paymentStatus"]) || undefined;
+      firstParam(params, ["payuStatus", "status", "txnStatus", "paymentStatus", "result"]) ||
+      undefined;
     const statusLc = (status || "").toLowerCase();
     const failedStatus =
       kind === "failure" ||
       ["failure", "failed", "cancelled", "canceled", "error", "bounced"].includes(statusLc);
 
-    if (failedStatus) {
+    if (failedStatus && kind === "failure") {
+      clearPendingPayuInvoice();
       setOutcome("failure");
       setMessage(
         firstParam(params, ["message", "error", "error_Message", "field9"]) ||
-          "Payment was cancelled or failed."
+          "Payment was cancelled or failed. You can try buying gold again."
+      );
+      return;
+    }
+
+    // Opened the route directly with no payment context
+    if (!invoiceNumber && !status && !txnId) {
+      setOutcome("idle");
+      setMessage(
+        "This page confirms a PayU payment after checkout. Start a gold purchase, complete payment, and PayU will bring you back here automatically."
       );
       return;
     }
@@ -63,9 +102,11 @@ export default function PaymentResultPage({ kind }: { kind: "success" | "failure
 
     if (!invoiceNumber) {
       setOutcome("failure");
-      setMessage("Missing payment reference. Please check History or contact support.");
+      setMessage("Missing payment reference from PayU. Open History or contact support.");
       return;
     }
+
+    setMessage("Confirming your payment with the server…");
 
     void (async () => {
       try {
@@ -73,8 +114,9 @@ export default function PaymentResultPage({ kind }: { kind: "success" | "failure
           provider: "PAYU",
           payuInvoiceNumber: invoiceNumber,
           payuTransactionId: txnId,
-          payuStatus: status,
+          payuStatus: status === "success" || status === "paid" ? "success" : status,
         });
+        clearPendingPayuInvoice();
         const g = verified.data?.breakdown.grams;
         const amt = verified.data?.breakdown.amountInr;
         await refreshUser();
@@ -95,41 +137,80 @@ export default function PaymentResultPage({ kind }: { kind: "success" | "failure
 
   const title =
     outcome === "loading"
-      ? "Processing…"
+      ? "Processing payment"
       : outcome === "success"
         ? "Payment successful"
         : outcome === "login"
           ? "Sign in required"
-          : "Payment failed";
+          : outcome === "idle"
+            ? "Payment confirmation"
+            : "Payment failed";
+
+  const titleColor =
+    outcome === "success"
+      ? "text-success"
+      : outcome === "failure"
+        ? "text-error"
+        : "text-ink";
 
   return (
-    <>
-      <Header title="Payment" onBack={() => navigate("/app")} />
-      <Screen>
-        <h1 className="mt-2 text-[22px] font-semibold text-ink">{title}</h1>
-        <p className="mt-3 text-[14px] text-muted">{message}</p>
-        <div className="mt-8 flex flex-col gap-3">
-          {outcome === "login" ? (
-            <PrimaryButton
-              type="button"
-              onClick={() =>
-                navigate("/login", { state: { from: { pathname: location.pathname, search: location.search } } })
-              }
-            >
-              Sign in to confirm
-            </PrimaryButton>
-          ) : (
-            <PrimaryButton type="button" onClick={() => navigate("/app")} loading={outcome === "loading"}>
-              {outcome === "loading" ? "Please wait" : "Go to Home"}
-            </PrimaryButton>
-          )}
-          {outcome !== "loading" && outcome !== "login" ? (
-            <Link to="/app/history" className="text-center text-sm font-medium text-primary-dark">
-              View history
-            </Link>
-          ) : null}
+    <div className="min-h-dvh bg-bg text-ink">
+      <header className="border-b border-border/60 bg-bg/95 px-4 py-3">
+        <div className="mx-auto flex max-w-[480px] items-center gap-3">
+          <button
+            type="button"
+            onClick={() => navigate(user ? "/app" : "/login")}
+            className="rounded-sm px-2 py-1 text-primary-dark hover:bg-surface-muted"
+            aria-label="Back"
+          >
+            ←
+          </button>
+          <h1 className="flex-1 text-lg font-semibold text-primary-dark">Payment</h1>
         </div>
-      </Screen>
-    </>
+      </header>
+
+      <main className="mx-auto w-full max-w-[480px] px-4 py-8">
+        <div className="rounded-lg border border-border bg-surface p-5 shadow-[var(--shadow-card)]">
+          <p className="text-[11px] font-semibold tracking-wide text-primary uppercase">
+            Smita Jewellers
+          </p>
+          <h2 className={`mt-2 text-[22px] font-semibold ${titleColor}`}>{title}</h2>
+          <p className="mt-3 text-[14px] leading-relaxed text-muted">{message}</p>
+
+          <div className="mt-8 flex flex-col gap-3">
+            {outcome === "login" ? (
+              <PrimaryButton
+                type="button"
+                onClick={() =>
+                  navigate("/login", {
+                    state: { from: { pathname: location.pathname, search: location.search } },
+                  })
+                }
+              >
+                Sign in to confirm
+              </PrimaryButton>
+            ) : outcome === "idle" ? (
+              <PrimaryButton type="button" onClick={() => navigate(user ? "/app/buy" : "/login")}>
+                {user ? "Buy gold" : "Sign in"}
+              </PrimaryButton>
+            ) : (
+              <PrimaryButton
+                type="button"
+                onClick={() => navigate(user ? "/app" : "/login")}
+                loading={outcome === "loading"}
+              >
+                {outcome === "loading" ? "Please wait" : user ? "Go to Home" : "Sign in"}
+              </PrimaryButton>
+            )}
+
+            {outcome !== "loading" && user ? (
+              <Link to="/app/history" className="text-center text-sm font-medium text-primary-dark">
+                View history
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }

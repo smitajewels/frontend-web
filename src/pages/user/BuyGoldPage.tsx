@@ -8,6 +8,7 @@ import { useAuth } from "../../context/AuthContext";
 import type { BuyGoldMode, GoldKarat, LiveGoldRates } from "../../types/api";
 import { cn, formatInr } from "../../utils/format";
 import { openRazorpayCheckout } from "../../utils/razorpay";
+import { stashPendingPayuInvoice } from "./PaymentResultPage";
 
 const KARATS: GoldKarat[] = ["K18", "K22", "K24"];
 const RATES_POLL_MS = 30_000;
@@ -57,6 +58,7 @@ export default function BuyGoldPage() {
 
       if (provider === "PAYU" || payu?.paymentLinkUrl) {
         if (!payu?.paymentLinkUrl) throw new Error("PayU payment link missing");
+        if (payu.invoiceNumber) stashPendingPayuInvoice(payu.invoiceNumber);
         window.location.href = payu.paymentLinkUrl;
         return;
       }
