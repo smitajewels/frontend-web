@@ -11,6 +11,7 @@ import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
 
 import HomePage from "./pages/user/HomePage";
 import BuyGoldPage from "./pages/user/BuyGoldPage";
+import PaymentResultPage from "./pages/user/PaymentResultPage";
 import HistoryPage from "./pages/user/HistoryPage";
 import CollectPage from "./pages/user/CollectPage";
 import ProfilePage from "./pages/user/ProfilePage";
@@ -48,6 +49,8 @@ export default function App() {
               <Route path="profile" element={<ProfilePage />} />
             </Route>
             <Route path="/app/buy" element={<BuyGoldPage />} />
+            <Route path="/app/payment/success" element={<PaymentResultPage kind="success" />} />
+            <Route path="/app/payment/failure" element={<PaymentResultPage kind="failure" />} />
             <Route path="/app/change-password" element={<ChangePasswordPage />} />
           </Route>
 

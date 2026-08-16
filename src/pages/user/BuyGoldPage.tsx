@@ -52,8 +52,16 @@ export default function BuyGoldPage() {
         mode === "BY_GRAMS" ? Number(grams) : undefined
       );
 
-      if (!res.data?.razorpay) throw new Error("Failed to create payment order");
-      const { razorpay, breakdown } = res.data;
+      if (!res.data) throw new Error("Failed to create payment order");
+      const { razorpay, payu, breakdown, provider } = res.data;
+
+      if (provider === "PAYU" || payu?.paymentLinkUrl) {
+        if (!payu?.paymentLinkUrl) throw new Error("PayU payment link missing");
+        window.location.href = payu.paymentLinkUrl;
+        return;
+      }
+
+      if (!razorpay) throw new Error("Failed to create payment order");
 
       if (razorpay.paymentLinkUrl && !razorpay.orderId) {
         window.location.href = razorpay.paymentLinkUrl;
@@ -65,6 +73,7 @@ export default function BuyGoldPage() {
         async (paymentResponse) => {
           try {
             const verified = await goldApi.verifyBuyPayment({
+              provider: "RAZORPAY",
               razorpayOrderId: paymentResponse.razorpay_order_id,
               razorpayPaymentId: paymentResponse.razorpay_payment_id,
               razorpaySignature: paymentResponse.razorpay_signature,
@@ -93,7 +102,7 @@ export default function BuyGoldPage() {
       <Header title="Buy Gold" onBack={() => navigate(-1)} />
       <Screen>
         <h1 className="mt-2 text-[22px] font-semibold text-ink">Buy Gold</h1>
-        <p className="mb-4 text-[13px] text-muted">Pay securely via Razorpay</p>
+        <p className="mb-4 text-[13px] text-muted">Pay securely online</p>
 
         {rates ? (
           <div className="mb-4">
@@ -172,7 +181,7 @@ export default function BuyGoldPage() {
           </div>
 
           <PrimaryButton type="submit" loading={loading}>
-            Pay with Razorpay
+            Continue to payment
           </PrimaryButton>
         </form>
       </Screen>

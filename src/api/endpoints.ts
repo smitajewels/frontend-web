@@ -83,12 +83,16 @@ export const goldApi = {
     }),
 
   verifyBuyPayment: (body: {
+    provider?: "RAZORPAY" | "PAYU";
     razorpayOrderId?: string;
-    razorpayPaymentId: string;
-    razorpaySignature: string;
+    razorpayPaymentId?: string;
+    razorpaySignature?: string;
     razorpayPaymentLinkId?: string;
     razorpayPaymentLinkReferenceId?: string;
     razorpayPaymentLinkStatus?: string;
+    payuInvoiceNumber?: string;
+    payuTransactionId?: string;
+    payuStatus?: string;
   }) =>
     apiRequest<BuyGoldResult>("/api/gold/buy/verify", {
       method: "POST",

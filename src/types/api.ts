@@ -113,8 +113,13 @@ export interface RazorpayPayment {
   id: string;
   userId: string;
   goldTransactionId: string;
-  razorpayOrderId: string;
+  provider?: "RAZORPAY" | "PAYU";
+  razorpayOrderId: string | null;
   razorpayPaymentId: string | null;
+  razorpayPaymentLinkId?: string | null;
+  paymentLinkUrl?: string | null;
+  payuInvoiceNumber?: string | null;
+  payuTransactionId?: string | null;
   amountInr: number;
   amountPaise: number;
   currency: string;
@@ -134,7 +139,20 @@ export interface RazorpayCheckout {
   name: string;
   description: string;
   prefill: { name?: string; email?: string; contact?: string };
+  paymentLinkId?: string;
   paymentLinkUrl?: string;
+  callbackUrl?: string;
+}
+
+export interface PayuCheckout {
+  invoiceNumber: string;
+  paymentLinkUrl: string;
+  amount: number;
+  currency: string;
+  name: string;
+  description: string;
+  successUrl: string;
+  failureUrl: string;
 }
 
 export interface BuyGoldResult {
@@ -152,7 +170,9 @@ export interface BuyGoldResult {
   };
   transaction: GoldTransaction;
   payment: RazorpayPayment;
-  razorpay: RazorpayCheckout;
+  provider?: "RAZORPAY" | "PAYU";
+  razorpay?: RazorpayCheckout;
+  payu?: PayuCheckout;
 }
 
 export interface PaginatedTransactions {
