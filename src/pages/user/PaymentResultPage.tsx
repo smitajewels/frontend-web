@@ -8,6 +8,14 @@ import { formatInr } from "../../utils/format";
 
 type Outcome = "loading" | "success" | "failure";
 
+function firstParam(params: URLSearchParams, keys: string[]) {
+  for (const key of keys) {
+    const value = params.get(key);
+    if (value && value.trim()) return value.trim();
+  }
+  return "";
+}
+
 export default function PaymentResultPage({ kind }: { kind: "success" | "failure" }) {
   const navigate = useNavigate();
   const { refreshUser } = useAuth();
@@ -20,21 +28,29 @@ export default function PaymentResultPage({ kind }: { kind: "success" | "failure
     if (ran.current) return;
     ran.current = true;
 
-    const invoiceNumber =
-      params.get("payuInvoiceNumber") ||
-      params.get("invoiceNumber") ||
-      params.get("invoice_number") ||
-      "";
+    // PayU may redirect with invoiceNumber, txnid, udf1 (we store invoice in udf1), etc.
+    const invoiceNumber = firstParam(params, [
+      "payuInvoiceNumber",
+      "invoiceNumber",
+      "invoice_number",
+      "txnid",
+      "udf1",
+    ]);
     const txnId =
-      params.get("payuTransactionId") ||
-      params.get("txnid") ||
-      params.get("mihpayid") ||
-      undefined;
-    const status = params.get("payuStatus") || params.get("status") || undefined;
+      firstParam(params, ["payuTransactionId", "mihpayid", "payuId", "txnId"]) || undefined;
+    const status =
+      firstParam(params, ["payuStatus", "status", "txnStatus", "paymentStatus"]) || undefined;
+    const statusLc = (status || "").toLowerCase();
+    const failedStatus =
+      kind === "failure" ||
+      ["failure", "failed", "cancelled", "canceled", "error", "bounced"].includes(statusLc);
 
-    if (kind === "failure") {
+    if (failedStatus) {
       setOutcome("failure");
-      setMessage(params.get("message") || "Payment was cancelled or failed.");
+      setMessage(
+        firstParam(params, ["message", "error", "error_Message", "field9"]) ||
+          "Payment was cancelled or failed."
+      );
       return;
     }
 
