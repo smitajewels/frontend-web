@@ -6,7 +6,7 @@ import { PrimaryButton } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import { formatInr } from "../../utils/format";
 
-type Outcome = "loading" | "success" | "failure" | "login" | "idle";
+type Outcome = "loading" | "success" | "failure" | "login" | "idle" | "pending";
 
 const PENDING_INVOICE_KEY = "payu_pending_invoice";
 
@@ -56,6 +56,7 @@ export default function PaymentResultPage({ kind }: { kind: "success" | "failure
     if (ran.current) return;
     ran.current = true;
 
+    const settled = firstParam(params, ["settled"]).toLowerCase();
     const invoiceNumber =
       firstParam(params, [
         "payuInvoiceNumber",
@@ -64,45 +65,61 @@ export default function PaymentResultPage({ kind }: { kind: "success" | "failure
         "txnid",
         "udf1",
       ]) || readPendingPayuInvoice();
-
     const txnId =
       firstParam(params, ["payuTransactionId", "mihpayid", "payuId", "txnId"]) || undefined;
     const status =
       firstParam(params, ["payuStatus", "status", "txnStatus", "paymentStatus", "result"]) ||
       undefined;
-    const statusLc = (status || "").toLowerCase();
-    const failedStatus =
-      kind === "failure" ||
-      ["failure", "failed", "cancelled", "canceled", "error", "bounced"].includes(statusLc);
 
-    if (failedStatus && kind === "failure") {
+    // Backend already settled DB on the PayU redirect bridge.
+    if (settled === "credited") {
+      clearPendingPayuInvoice();
+      setOutcome("success");
+      setMessage("Payment successful. Gold has been credited to your portfolio.");
+      if (user) {
+        void refreshUser().then(() => toast.success("Gold credited"));
+      } else {
+        toast.success("Payment successful");
+      }
+      return;
+    }
+
+    if (settled === "failed" || kind === "failure") {
       clearPendingPayuInvoice();
       setOutcome("failure");
       setMessage(
-        firstParam(params, ["message", "error", "error_Message", "field9"]) ||
-          "Payment was cancelled or failed. You can try buying gold again."
+        firstParam(params, ["message", "error"]) ||
+          "Payment failed or was cancelled. No gold was added."
       );
       return;
     }
 
-    // Opened the route directly with no payment context
-    if (!invoiceNumber && !status && !txnId) {
+    if (!invoiceNumber && !status && !txnId && !settled) {
       setOutcome("idle");
       setMessage(
-        "This page confirms a PayU payment after checkout. Start a gold purchase, complete payment, and PayU will bring you back here automatically."
+        "This page confirms a PayU payment after checkout. Complete a purchase and PayU will return you here."
       );
       return;
     }
 
+    // Backend said pending, or settled missing — try verify if logged in.
     if (!user) {
       setOutcome("login");
-      setMessage("Sign in to confirm this payment and credit gold to your account.");
+      setMessage(
+        settled === "pending"
+          ? "Payment is processing. Sign in to confirm and credit gold."
+          : "Sign in to confirm this payment and credit gold to your account."
+      );
       return;
     }
 
     if (!invoiceNumber) {
-      setOutcome("failure");
-      setMessage("Missing payment reference from PayU. Open History or contact support.");
+      setOutcome(settled === "pending" ? "pending" : "failure");
+      setMessage(
+        settled === "pending"
+          ? "Payment is still processing at PayU. Check History in a moment."
+          : "Missing payment reference from PayU."
+      );
       return;
     }
 
@@ -128,9 +145,15 @@ export default function PaymentResultPage({ kind }: { kind: "success" | "failure
         );
         toast.success("Payment verified");
       } catch (err) {
-        setOutcome("failure");
-        setMessage(err instanceof Error ? err.message : "Payment verification failed");
-        toast.error(err instanceof Error ? err.message : "Payment verification failed");
+        const msg = err instanceof Error ? err.message : "Payment verification failed";
+        if (/not completed|pending|not captured/i.test(msg)) {
+          setOutcome("pending");
+          setMessage("Payment is still processing. Gold will appear once PayU confirms — check History shortly.");
+        } else {
+          setOutcome("failure");
+          setMessage(msg);
+          toast.error(msg);
+        }
       }
     })();
   }, [authLoading, kind, params, refreshUser, user]);
@@ -144,14 +167,18 @@ export default function PaymentResultPage({ kind }: { kind: "success" | "failure
           ? "Sign in required"
           : outcome === "idle"
             ? "Payment confirmation"
-            : "Payment failed";
+            : outcome === "pending"
+              ? "Payment pending"
+              : "Payment failed";
 
   const titleColor =
     outcome === "success"
       ? "text-success"
       : outcome === "failure"
         ? "text-error"
-        : "text-ink";
+        : outcome === "pending"
+          ? "text-warning"
+          : "text-ink";
 
   return (
     <div className="min-h-dvh bg-bg text-ink">
