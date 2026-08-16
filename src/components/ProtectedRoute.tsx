@@ -18,8 +18,18 @@ export function ProtectedRoute({ role }: { role?: "USER" | "ADMIN" }) {
 
 export function GuestRoute() {
   const { user, loading } = useAuth();
+  const location = useLocation();
   if (loading) return <PageLoader />;
-  if (user) return <Navigate to={user.role === "ADMIN" ? "/admin" : "/app"} replace />;
+  if (user) {
+    const from = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from;
+    const target =
+      from?.pathname && from.pathname.startsWith("/")
+        ? `${from.pathname}${from.search || ""}`
+        : user.role === "ADMIN"
+          ? "/admin"
+          : "/app";
+    return <Navigate to={target} replace />;
+  }
   return <Outlet />;
 }
 

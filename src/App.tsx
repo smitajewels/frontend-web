@@ -49,10 +49,12 @@ export default function App() {
               <Route path="profile" element={<ProfilePage />} />
             </Route>
             <Route path="/app/buy" element={<BuyGoldPage />} />
-            <Route path="/app/payment/success" element={<PaymentResultPage kind="success" />} />
-            <Route path="/app/payment/failure" element={<PaymentResultPage kind="failure" />} />
             <Route path="/app/change-password" element={<ChangePasswordPage />} />
           </Route>
+
+          {/* PayU returns here after backend bridge; allow page to load then prompt login if needed */}
+          <Route path="/app/payment/success" element={<PaymentResultPage kind="success" />} />
+          <Route path="/app/payment/failure" element={<PaymentResultPage kind="failure" />} />
 
           <Route element={<ProtectedRoute role="ADMIN" />}>
             <Route path="/admin" element={<AdminLayout />}>

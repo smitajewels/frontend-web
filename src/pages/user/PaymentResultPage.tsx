@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { goldApi } from "../../api/endpoints";
 import { Header, PrimaryButton, Screen } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import { formatInr } from "../../utils/format";
 
-type Outcome = "loading" | "success" | "failure";
+type Outcome = "loading" | "success" | "failure" | "login";
 
 function firstParam(params: URLSearchParams, keys: string[]) {
   for (const key of keys) {
@@ -18,17 +18,18 @@ function firstParam(params: URLSearchParams, keys: string[]) {
 
 export default function PaymentResultPage({ kind }: { kind: "success" | "failure" }) {
   const navigate = useNavigate();
-  const { refreshUser } = useAuth();
+  const location = useLocation();
+  const { user, loading: authLoading, refreshUser } = useAuth();
   const [params] = useSearchParams();
   const [outcome, setOutcome] = useState<Outcome>("loading");
   const [message, setMessage] = useState("Confirming your payment…");
   const ran = useRef(false);
 
   useEffect(() => {
+    if (authLoading) return;
     if (ran.current) return;
     ran.current = true;
 
-    // PayU may redirect with invoiceNumber, txnid, udf1 (we store invoice in udf1), etc.
     const invoiceNumber = firstParam(params, [
       "payuInvoiceNumber",
       "invoiceNumber",
@@ -51,6 +52,12 @@ export default function PaymentResultPage({ kind }: { kind: "success" | "failure
         firstParam(params, ["message", "error", "error_Message", "field9"]) ||
           "Payment was cancelled or failed."
       );
+      return;
+    }
+
+    if (!user) {
+      setOutcome("login");
+      setMessage("Sign in to confirm this payment and credit gold to your account.");
       return;
     }
 
@@ -84,21 +91,39 @@ export default function PaymentResultPage({ kind }: { kind: "success" | "failure
         toast.error(err instanceof Error ? err.message : "Payment verification failed");
       }
     })();
-  }, [kind, params, refreshUser]);
+  }, [authLoading, kind, params, refreshUser, user]);
+
+  const title =
+    outcome === "loading"
+      ? "Processing…"
+      : outcome === "success"
+        ? "Payment successful"
+        : outcome === "login"
+          ? "Sign in required"
+          : "Payment failed";
 
   return (
     <>
       <Header title="Payment" onBack={() => navigate("/app")} />
       <Screen>
-        <h1 className="mt-2 text-[22px] font-semibold text-ink">
-          {outcome === "loading" ? "Processing…" : outcome === "success" ? "Payment successful" : "Payment failed"}
-        </h1>
+        <h1 className="mt-2 text-[22px] font-semibold text-ink">{title}</h1>
         <p className="mt-3 text-[14px] text-muted">{message}</p>
         <div className="mt-8 flex flex-col gap-3">
-          <PrimaryButton type="button" onClick={() => navigate("/app")} loading={outcome === "loading"}>
-            {outcome === "loading" ? "Please wait" : "Go to Home"}
-          </PrimaryButton>
-          {outcome !== "loading" ? (
+          {outcome === "login" ? (
+            <PrimaryButton
+              type="button"
+              onClick={() =>
+                navigate("/login", { state: { from: { pathname: location.pathname, search: location.search } } })
+              }
+            >
+              Sign in to confirm
+            </PrimaryButton>
+          ) : (
+            <PrimaryButton type="button" onClick={() => navigate("/app")} loading={outcome === "loading"}>
+              {outcome === "loading" ? "Please wait" : "Go to Home"}
+            </PrimaryButton>
+          )}
+          {outcome !== "loading" && outcome !== "login" ? (
             <Link to="/app/history" className="text-center text-sm font-medium text-primary-dark">
               View history
             </Link>
