@@ -4,18 +4,16 @@ import { toast } from "sonner";
 import { goldApi } from "../../api/endpoints";
 import { LiveRateBanner } from "../../components/GoldWidgets";
 import { Header, Input, PrimaryButton, Screen } from "../../components/ui";
-import { useAuth } from "../../context/AuthContext";
 import type { BuyGoldMode, GoldKarat, LiveGoldRates } from "../../types/api";
-import { cn, formatInr } from "../../utils/format";
-import { openRazorpayCheckout } from "../../utils/razorpay";
-import { stashPendingPayuInvoice } from "./PaymentResultPage";
+import { cn } from "../../utils/format";
+import { redirectToPayuCheckout } from "../../utils/payu";
+import { stashPendingPayuTxn } from "./PaymentResultPage";
 
 const KARATS: GoldKarat[] = ["K18", "K22", "K24"];
 const RATES_POLL_MS = 30_000;
 
 export default function BuyGoldPage() {
   const navigate = useNavigate();
-  const { refreshUser } = useAuth();
   const [karat, setKarat] = useState<GoldKarat>("K24");
   const [mode, setMode] = useState<BuyGoldMode>("BY_GRAMS");
   const [grams, setGrams] = useState("0.5");
@@ -53,46 +51,9 @@ export default function BuyGoldPage() {
         mode === "BY_GRAMS" ? Number(grams) : undefined
       );
 
-      if (!res.data) throw new Error("Failed to create payment order");
-      const { razorpay, payu, breakdown, provider } = res.data;
-
-      if (provider === "PAYU" || payu?.paymentLinkUrl) {
-        if (!payu?.paymentLinkUrl) throw new Error("PayU payment link missing");
-        if (payu.invoiceNumber) stashPendingPayuInvoice(payu.invoiceNumber);
-        window.location.href = payu.paymentLinkUrl;
-        return;
-      }
-
-      if (!razorpay) throw new Error("Failed to create payment order");
-
-      if (razorpay.paymentLinkUrl && !razorpay.orderId) {
-        window.location.href = razorpay.paymentLinkUrl;
-        return;
-      }
-
-      await openRazorpayCheckout(
-        razorpay,
-        async (paymentResponse) => {
-          try {
-            const verified = await goldApi.verifyBuyPayment({
-              provider: "RAZORPAY",
-              razorpayOrderId: paymentResponse.razorpay_order_id,
-              razorpayPaymentId: paymentResponse.razorpay_payment_id,
-              razorpaySignature: paymentResponse.razorpay_signature,
-            });
-            const g = verified.data?.breakdown.grams ?? breakdown.grams;
-            const amt = verified.data?.breakdown.amountInr ?? breakdown.amountInr;
-            await refreshUser();
-            toast.success(`Purchased ${g.toFixed(3)}g for ${formatInr(amt)}`);
-            navigate("/app");
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Payment verification failed");
-          } finally {
-            setLoading(false);
-          }
-        },
-        () => setLoading(false)
-      );
+      if (!res.data?.payu) throw new Error("Failed to create PayU payment order");
+      stashPendingPayuTxn(res.data.payu.txnid);
+      redirectToPayuCheckout(res.data.payu);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Purchase failed");
       setLoading(false);

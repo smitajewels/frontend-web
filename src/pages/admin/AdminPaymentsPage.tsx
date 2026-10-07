@@ -40,7 +40,7 @@ export default function AdminPaymentsPage() {
       <p className="mb-4 text-[13px] text-muted">
         {filterUserId
           ? `Showing payments for ${filterUserName || "selected customer"}`
-          : "All customer Razorpay payments"}
+          : "All customer PayU payments"}
       </p>
 
       <SearchBar value={search} onChange={setSearch} placeholder="Search by customer name" />
@@ -111,8 +111,9 @@ export default function AdminPaymentsPage() {
               </div>
 
               <div className="mt-3 border-t border-border pt-2 text-[12px] text-muted">
-                <p>Order: {p.razorpayOrderId}</p>
-                {p.razorpayPaymentId ? <p className="mt-0.5">Payment: {p.razorpayPaymentId}</p> : null}
+                <p>Txn: {p.txnid}</p>
+                {p.mihpayid ? <p className="mt-0.5">PayU ID: {p.mihpayid}</p> : null}
+                {p.mode ? <p className="mt-0.5">Mode: {p.mode}</p> : null}
               </div>
             </Card>
           );

@@ -119,10 +119,11 @@ export default function HistoryPage() {
                 {p.status}
               </span>
             </div>
-            <p className="mt-2 text-[13px] text-muted">Order: {p.razorpayOrderId}</p>
-            {p.razorpayPaymentId ? (
-              <p className="mt-1 text-[13px] text-muted">Payment: {p.razorpayPaymentId}</p>
+            <p className="mt-2 text-[13px] text-muted">Txn: {p.txnid}</p>
+            {p.mihpayid ? (
+              <p className="mt-1 text-[13px] text-muted">PayU ID: {p.mihpayid}</p>
             ) : null}
+            {p.mode ? <p className="mt-1 text-[13px] text-muted">Mode: {p.mode}</p> : null}
             <p className="mt-1.5 text-[13px] text-faint">{formatDateTime(p.createdAt)}</p>
           </Card>
         ))

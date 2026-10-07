@@ -8,27 +8,34 @@ import { formatInr } from "../../utils/format";
 
 type Outcome = "loading" | "success" | "failure" | "login" | "idle" | "pending";
 
-const PENDING_INVOICE_KEY = "payu_pending_invoice";
+const PENDING_TXN_KEY = "payu_pending_txnid";
+const VERIFY_ATTEMPTS = 12;
+const VERIFY_DELAY_MS = 2000;
 
-export function stashPendingPayuInvoice(invoiceNumber: string) {
+export function stashPendingPayuTxn(txnid: string) {
   try {
-    sessionStorage.setItem(PENDING_INVOICE_KEY, invoiceNumber);
+    sessionStorage.setItem(PENDING_TXN_KEY, txnid);
   } catch {
     /* ignore */
   }
 }
 
-function readPendingPayuInvoice() {
+/** @deprecated */
+export function stashPendingPayuInvoice(invoiceNumber: string) {
+  stashPendingPayuTxn(invoiceNumber);
+}
+
+function readPendingPayuTxn() {
   try {
-    return sessionStorage.getItem(PENDING_INVOICE_KEY)?.trim() || "";
+    return sessionStorage.getItem(PENDING_TXN_KEY)?.trim() || "";
   } catch {
     return "";
   }
 }
 
-function clearPendingPayuInvoice() {
+function clearPendingPayuTxn() {
   try {
-    sessionStorage.removeItem(PENDING_INVOICE_KEY);
+    sessionStorage.removeItem(PENDING_TXN_KEY);
   } catch {
     /* ignore */
   }
@@ -42,121 +49,172 @@ function firstParam(params: URLSearchParams, keys: string[]) {
   return "";
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isPendingVerifyError(message: string) {
+  return /not completed|pending|not captured|still processing|try again/i.test(message);
+}
+
 export default function PaymentResultPage({ kind }: { kind: "success" | "failure" }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, loading: authLoading, refreshUser } = useAuth();
   const [params] = useSearchParams();
+  const search = params.toString();
   const [outcome, setOutcome] = useState<Outcome>("loading");
-  const [message, setMessage] = useState("Loading payment result…");
-  const ran = useRef(false);
+  const [message, setMessage] = useState("Confirming your payment…");
+  const finishedRef = useRef(false);
 
   useEffect(() => {
     if (authLoading) return;
-    if (ran.current) return;
-    ran.current = true;
+    if (finishedRef.current) return;
 
-    const settled = firstParam(params, ["settled"]).toLowerCase();
-    const invoiceNumber =
-      firstParam(params, [
-        "payuInvoiceNumber",
-        "invoiceNumber",
-        "invoice_number",
-        "txnid",
-        "udf1",
-      ]) || readPendingPayuInvoice();
-    const txnId =
-      firstParam(params, ["payuTransactionId", "mihpayid", "payuId", "txnId"]) || undefined;
+    let cancelled = false;
+    const query = new URLSearchParams(search);
+
+    const settled = firstParam(query, ["settled"]).toLowerCase();
+    const txnid =
+      firstParam(query, ["txnid"]) || readPendingPayuTxn();
+    const mihpayid = firstParam(query, ["mihpayid", "payuTransactionId"]) || undefined;
     const status =
-      firstParam(params, ["payuStatus", "status", "txnStatus", "paymentStatus", "result"]) ||
-      undefined;
+      firstParam(query, ["status", "payuStatus", "result"]) || undefined;
+    const amount = firstParam(query, ["amount"]) || undefined;
+    const mode = firstParam(query, ["mode"]) || undefined;
 
-    // Backend already settled DB on the PayU redirect bridge.
-    if (settled === "credited") {
-      clearPendingPayuInvoice();
+    const markSuccess = async (detail?: string) => {
+      if (cancelled) return;
+      finishedRef.current = true;
+      clearPendingPayuTxn();
       setOutcome("success");
-      setMessage("Payment successful. Gold has been credited to your portfolio.");
-      if (user) {
-        void refreshUser().then(() => toast.success("Gold credited"));
-      } else {
-        toast.success("Payment successful");
-      }
-      return;
-    }
-
-    if (settled === "failed" || kind === "failure") {
-      clearPendingPayuInvoice();
-      setOutcome("failure");
-      setMessage(
-        firstParam(params, ["message", "error"]) ||
-          "Payment failed or was cancelled. No gold was added."
-      );
-      return;
-    }
-
-    if (!invoiceNumber && !status && !txnId && !settled) {
-      setOutcome("idle");
-      setMessage(
-        "This page confirms a PayU payment after checkout. Complete a purchase and PayU will return you here."
-      );
-      return;
-    }
-
-    // Backend said pending, or settled missing — try verify if logged in.
-    if (!user) {
-      setOutcome("login");
-      setMessage(
-        settled === "pending"
-          ? "Payment is processing. Sign in to confirm and credit gold."
-          : "Sign in to confirm this payment and credit gold to your account."
-      );
-      return;
-    }
-
-    if (!invoiceNumber) {
-      setOutcome(settled === "pending" ? "pending" : "failure");
-      setMessage(
-        settled === "pending"
-          ? "Payment is still processing at PayU. Check History in a moment."
-          : "Missing payment reference from PayU."
-      );
-      return;
-    }
-
-    setMessage("Confirming your payment with the server…");
-
-    void (async () => {
+      setMessage(detail || "Payment successful. Gold has been credited to your portfolio.");
       try {
-        const verified = await goldApi.verifyBuyPayment({
-          provider: "PAYU",
-          payuInvoiceNumber: invoiceNumber,
-          payuTransactionId: txnId,
-          payuStatus: status === "success" || status === "paid" ? "success" : status,
-        });
-        clearPendingPayuInvoice();
-        const g = verified.data?.breakdown.grams;
-        const amt = verified.data?.breakdown.amountInr;
-        await refreshUser();
-        setOutcome("success");
-        setMessage(
-          g != null && amt != null
-            ? `Purchased ${g.toFixed(3)}g for ${formatInr(amt)}`
-            : "Payment successful. Gold credited to your portfolio."
-        );
-        toast.success("Payment verified");
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Payment verification failed";
-        if (/not completed|pending|not captured/i.test(msg)) {
-          setOutcome("pending");
-          setMessage("Payment is still processing. Gold will appear once PayU confirms — check History shortly.");
-        } else {
-          setOutcome("failure");
-          setMessage(msg);
-          toast.error(msg);
+        if (user) await refreshUser();
+      } catch {
+        /* ignore */
+      }
+      toast.success("Payment successful");
+    };
+
+    const markFailure = (detail?: string) => {
+      if (cancelled) return;
+      finishedRef.current = true;
+      clearPendingPayuTxn();
+      setOutcome("failure");
+      setMessage(detail || "Payment failed or was cancelled. No gold was added.");
+    };
+
+    const verifyWithRetries = async () => {
+      if (!txnid) {
+        setOutcome("pending");
+        setMessage("Payment is still processing at PayU. Check History in a moment.");
+        return;
+      }
+
+      setOutcome("loading");
+      setMessage("Confirming your payment with PayU…");
+
+      let lastError = "Payment verification failed";
+
+      for (let attempt = 1; attempt <= VERIFY_ATTEMPTS; attempt++) {
+        if (cancelled) return;
+
+        try {
+          const verified = await goldApi.verifyBuyPayment({
+            txnid,
+            mihpayid,
+            status:
+              status === "success" || status === "paid" || kind === "success" ? "success" : status,
+            amount,
+            mode,
+          });
+
+          const g = verified.data?.breakdown.grams;
+          const amt = verified.data?.breakdown.amountInr;
+          await markSuccess(
+            g != null && amt != null
+              ? `Purchased ${g.toFixed(3)}g for ${formatInr(amt)}`
+              : undefined
+          );
+          return;
+        } catch (err) {
+          lastError = err instanceof Error ? err.message : "Payment verification failed";
+
+          if (/unauthorized|401/i.test(lastError)) {
+            setOutcome("login");
+            setMessage("Sign in to confirm this payment and credit gold to your account.");
+            return;
+          }
+
+          if (/failed or cancelled|failed or canceled|payment failed/i.test(lastError)) {
+            markFailure(lastError);
+            return;
+          }
+
+          if (attempt < VERIFY_ATTEMPTS && isPendingVerifyError(lastError)) {
+            setMessage(`Confirming payment… (${attempt}/${VERIFY_ATTEMPTS})`);
+            await sleep(VERIFY_DELAY_MS);
+            continue;
+          }
+
+          break;
         }
       }
+
+      if (cancelled) return;
+
+      if (isPendingVerifyError(lastError)) {
+        setOutcome("pending");
+        setMessage(
+          "Payment is still processing at PayU. Gold will appear once confirmed — check History shortly."
+        );
+      } else {
+        markFailure(lastError);
+        toast.error(lastError);
+      }
+    };
+
+    void (async () => {
+      if (settled === "credited") {
+        await markSuccess();
+        return;
+      }
+
+      if (settled === "failed" || kind === "failure") {
+        markFailure(
+          firstParam(query, ["message", "error"]) ||
+            "Payment failed or was cancelled. No gold was added."
+        );
+        return;
+      }
+
+      if (!txnid && !status && !mihpayid && !settled) {
+        finishedRef.current = true;
+        setOutcome("idle");
+        setMessage(
+          "This page confirms a PayU payment after checkout. Complete a purchase and PayU will return you here."
+        );
+        return;
+      }
+
+      if (!user) {
+        setOutcome("login");
+        setMessage(
+          settled === "pending"
+            ? "Payment is processing. Sign in to confirm and credit gold."
+            : "Sign in to confirm this payment and credit gold to your account."
+        );
+        return;
+      }
+
+      await verifyWithRetries();
     })();
-  }, [authLoading, kind, params, refreshUser, user]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, kind, search, refreshUser, user?.id]);
 
   const title =
     outcome === "loading"

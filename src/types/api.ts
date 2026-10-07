@@ -109,17 +109,14 @@ export interface SchemeInfo {
   schemeAssetPath: string;
 }
 
-export interface RazorpayPayment {
+export interface PaymentRecord {
   id: string;
   userId: string;
   goldTransactionId: string;
-  provider?: "RAZORPAY" | "PAYU";
-  razorpayOrderId: string | null;
-  razorpayPaymentId: string | null;
-  razorpayPaymentLinkId?: string | null;
-  paymentLinkUrl?: string | null;
-  payuInvoiceNumber?: string | null;
-  payuTransactionId?: string | null;
+  provider: "PAYU";
+  txnid: string;
+  mihpayid: string | null;
+  mode: string | null;
   amountInr: number;
   amountPaise: number;
   currency: string;
@@ -131,28 +128,30 @@ export interface RazorpayPayment {
   goldTransaction?: GoldTransaction;
 }
 
-export interface RazorpayCheckout {
-  keyId: string;
-  orderId: string;
-  amount: number;
-  currency: string;
-  name: string;
-  description: string;
-  prefill: { name?: string; email?: string; contact?: string };
-  paymentLinkId?: string;
-  paymentLinkUrl?: string;
-  callbackUrl?: string;
-}
+/** @deprecated Use PaymentRecord */
+export type RazorpayPayment = PaymentRecord;
 
 export interface PayuCheckout {
-  invoiceNumber: string;
-  paymentLinkUrl: string;
-  amount: number;
-  currency: string;
+  action: string;
+  key: string;
+  txnid: string;
+  amount: string;
+  productinfo: string;
+  firstname: string;
+  email: string;
+  phone: string;
+  surl: string;
+  furl: string;
+  hash: string;
+  udf1: string;
+  udf2: string;
+  udf3: string;
+  udf4: string;
+  udf5: string;
+  service_provider: string;
   name: string;
   description: string;
-  successUrl: string;
-  failureUrl: string;
+  currency: string;
 }
 
 export interface BuyGoldResult {
@@ -169,10 +168,9 @@ export interface BuyGoldResult {
     buyMode: BuyGoldMode;
   };
   transaction: GoldTransaction;
-  payment: RazorpayPayment;
-  provider?: "RAZORPAY" | "PAYU";
-  razorpay?: RazorpayCheckout;
-  payu?: PayuCheckout;
+  payment: PaymentRecord;
+  provider: "PAYU";
+  payu: PayuCheckout;
 }
 
 export interface PaginatedTransactions {
@@ -181,11 +179,11 @@ export interface PaginatedTransactions {
 }
 
 export interface PaginatedPayments {
-  items: RazorpayPayment[];
+  items: PaymentRecord[];
   meta: { page: number; limit: number; total: number; totalPages: number };
 }
 
-export interface AdminPayment extends RazorpayPayment {
+export interface AdminPayment extends PaymentRecord {
   user: { id: string; email: string; name: string; phone: string | null };
 }
 
